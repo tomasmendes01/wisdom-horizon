@@ -4,6 +4,11 @@
 override shadow_filter: bool = true;
 override cloud_shadow: bool = true;
 override water_reflections: bool = true;
+override held_lights: bool = true;
+// Horizon port option: how bright glowing blocks are (1 shows their texture's own colour).
+override emissive_brightness: f32 = 1.0;
+// The option of post/entity_light.wgsl: water is marked for it only while it is on.
+override relight_entities: bool = true;
 
 const TORCH_COLOR: vec3<f32> = vec3<f32>(0.2435, 0.0921, 0.01053) * 3.0;
 
@@ -112,10 +117,20 @@ fn fetch_shadow(position: vec3<f32>, normal: vec3<f32>, screen: vec2<f32>, c: Co
 
 // --- composite3: calc_fog_height ----------------------------------------------
 
+// Horizon port option: how much rain thickens the fog, from Wisdom's own (1) to none (0).
+override rain_fog: f32 = 0.5;
+
+// Where Wisdom's fog is full: 512 blocks scaled by the cloud cover, of which rain's share is
+// scaled by rain_fog (clear skies keep Wisdom's 0.25 cover).
+fn fog_end(c: Commons) -> f32 {
+    let cover = 0.25 + (c.cloud_coverage - 0.25) * rain_fog;
+    return 512.0 * (1.0 - cover);
+}
+
 fn fog_height(position: vec3<f32>, start: f32, end: f32, color: vec3<f32>, fog: vec3<f32>) -> vec3<f32> {
     var k = 1.0 - clamp((end - length(position)) / (end - start), 0.0, 1.0);
     k *= clamp((end - position.y) / (end - start), 0.0, 1.0);
-    k = pow(k, (1.0 - frame.rain) * 0.5 + 0.5);
+    k = pow(k, (1.0 - frame.rain * rain_fog) * 0.5 + 0.5);
     return mix(color, fog, k);
 }
 
@@ -125,7 +140,7 @@ fn finish(hdr: vec3<f32>, position: vec3<f32>, c: Commons, alpha: f32) -> Surfac
     var color = hdr;
     let dir = normalize(position);
     if in_overworld() && frame.eye_in == 0u {
-        color = fog_height(position, 0.0, 512.0 * (1.0 - c.cloud_coverage), color, calc_atmosphere(position, dir, c));
+        color = fog_height(position, 0.0, fog_end(c), color, calc_atmosphere(position, dir, c));
         let edge = smoothstep(frame.render_distance * 0.8, frame.render_distance * 0.98, length(position.xz));
         color = mix(color, sky_color(dir, c, false), edge);
     }
@@ -136,6 +151,28 @@ fn finish(hdr: vec3<f32>, position: vec3<f32>, c: Commons, alpha: f32) -> Surfac
         out = mix(out, frame.fog_color, f);
     }
     return Surface(vec4<f32>(out, alpha));
+}
+
+// finish's fog for water, whose colour is already in display space: Wisdom's height fog and the
+// sky at the render-distance edge, tonemapped, then vanilla's fog where finish uses it.
+fn water_fog(display: vec3<f32>, position: vec3<f32>, c: Commons, exposure: f32) -> vec3<f32> {
+    var out = display;
+    let dir = normalize(position);
+    if in_overworld() && frame.eye_in == 0u {
+        let end = fog_end(c);
+        var k = 1.0 - clamp((end - length(position)) / end, 0.0, 1.0);
+        k *= clamp((end - position.y) / end, 0.0, 1.0);
+        k = pow(k, (1.0 - frame.rain * rain_fog) * 0.5 + 0.5);
+        out = mix(out, tonemap(max(calc_atmosphere(position, dir, c), vec3<f32>(0.0)) * exposure), k);
+        let edge = smoothstep(frame.render_distance * 0.8, frame.render_distance * 0.98, length(position.xz));
+        out = mix(out, tonemap(max(sky_color(dir, c, false), vec3<f32>(0.0)) * exposure), edge);
+    }
+    let vanilla_fog = !in_overworld() || frame.eye_in != 0u || frame.blindness > 0.0 || frame.darkness > 0.0;
+    if vanilla_fog {
+        let f = smoothstep(frame.fog_start, max(frame.fog_end, frame.fog_start + 0.01), length(position));
+        out = mix(out, frame.fog_color, f);
+    }
+    return out;
 }
 
 // Vanilla darkens block faces by direction; Wisdom runs with that off (oldLighting=false)
@@ -213,17 +250,51 @@ fn shade_water(input: MaterialInput, c: Commons) -> Surface {
     var reflected = to_linear(tonemap(sky_color(r, c, true) * exposure)) * sky_seen;
     if water_reflections && frame.has_reflection == 1u {
         let m = textureSampleLevel(reflection, reflection_sampler, clamp(input.screen + n.xz * 0.03, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0);
-        reflected = mix(reflected, to_linear(m.rgb), sky_seen * 0.85);
+        // Horizon draws the mirror with vanilla's lighting: bring it to this pack's light, by how
+        // the two compare for a grey surface lit as the water is (Horizon port change).
+        reflected = mix(reflected, to_linear(m.rgb * mirror_light_ratio(input, c, exposure)), sky_seen * 0.85);
     }
 
     let shadow = fetch_shadow(input.position, input.normal, input.screen, c);
     let h = normalize(frame.light_direction - nvpos);
-    let glint = pow(max(dot(n, h), 0.0), 300.0) * 6.0 * (1.0 - shadow.a) * (1.0 - c.ext_shadow);
+    // Rain clouds hide the sun: the glint fades with them (Horizon port change).
+    let glint = pow(max(dot(n, h), 0.0), 300.0) * 6.0 * (1.0 - shadow.a) * (1.0 - c.ext_shadow)
+        * (1.0 - 0.9 * bad_weather());
     let spec = to_linear(tonemap(c.sun * glint * exposure));
 
     var col = mix(refracted, reflected, fresnel) + spec;
     col = mix(col, refracted, frame.in_water);
-    return Surface(vec4<f32>(to_display(min(col, vec3<f32>(1.0))), 1.0));
+    // The same fog as the terrain (finish), so water greys out in the rain like the land does.
+    var out = water_fog(to_display(min(col, vec3<f32>(1.0))), input.position, c, exposure);
+    // The mark only matters to the mobs' relighting, and it shows as a dither in dark water.
+    if relight_entities {
+        out = water_marker(out, input.screen);
+    }
+    return Surface(vec4<f32>(out, 1.0));
+}
+
+// How much brighter or darker this pack lights a grey surface than vanilla does, where `input` is
+// (display-space luminance ratio), for pictures Horizon draws with vanilla's light.
+fn mirror_light_ratio(input: MaterialInput, c: Commons, exposure: f32) -> f32 {
+    let grey = 0.18;
+    var light = c.ambient * mclightmap_simulated_gi(input.light.y) + TORCH_COLOR * mclightmap_attenuation(input.light.x);
+    if in_overworld() {
+        light += c.sun * (1.0 - c.ext_shadow) * 0.25 * pow(input.light.y, 4.0);
+    }
+    let ours = luma(tonemap(vec3<f32>(grey) * light * exposure));
+    let vanilla = luma(vec3<f32>(pow(grey, 1.0 / 2.2)) * input.lightmap);
+    return clamp(ours / max(vanilla, 0.004), 0.05, 1.5);
+}
+
+// Water's pixels carry a mark in the low bits of each 8-bit channel, in a checkerboard: 2 mod 4
+// on even pixels, 0 mod 4 on odd ones (at most 3/255 off). No mob or item can match it over a
+// patch of pixels, even where its texture is one flat colour, so post/entity_light.wgsl can
+// leave water, and only water, out of the relighting of mobs and items.
+fn water_marker(display: vec3<f32>, screen: vec2<f32>) -> vec3<f32> {
+    let pixel = vec2<u32>(screen * frame.resolution);
+    let base = select(2.0, 0.0, ((pixel.x + pixel.y) & 1u) == 1u);
+    let v = floor(clamp(display, vec3<f32>(0.0), vec3<f32>(1.0)) * 255.0 / 4.0) * 4.0 + base;
+    return min(v, vec3<f32>(252.0 + base)) / 255.0;
 }
 
 // --- The material -------------------------------------------------------------
@@ -278,11 +349,26 @@ fn material(input: MaterialInput) -> Surface {
         color += albedo * c.ambient;
     }
     color += mclightmap_attenuation(block) * albedo * TORCH_COLOR;
+    // Horizon port addition: held and dropped light sources (Horizon's dynamic lights, coloured by
+    // the manifest's [[lights]]), on the same curve as Wisdom's torch light.
+    if held_lights {
+        let reach = max(input.colored_light.r, max(input.colored_light.g, input.colored_light.b));
+        let tint = input.colored_light / max(reach, 1e-4);
+        color += mclightmap_attenuation(reach) * albedo * tint * luma(TORCH_COLOR) * 3.0;
+    }
 
-    // Glowing blocks: Wisdom's emissive mix.
-    color = mix(color, albedo * 2.0, emissive);
+    // Glowing blocks (fire, lava, glowstone, torches): Wisdom's emissive mix, but scaled against
+    // the exposure so they show their own colour instead of burning out to white when the
+    // night raises the exposure (Horizon port change).
+    color = mix(color, albedo * (1.6 * emissive_brightness / get_exposure(c)), emissive);
     // Night vision: lift toward vanilla's lightmap.
     color = mix(color, albedo * to_linear(input.lightmap) * 1.5, frame.night_vision);
 
-    return finish(color, input.position, c, input.albedo.a * input.tint.a);
+    let surface = finish(color, input.position, c, input.albedo.a * input.tint.a);
+    // For the post pass that relights mobs, items and chests (post/entity_light.wgsl): how this
+    // pack's light here compares with vanilla's.
+    let vanilla = input.albedo.rgb * input.tint.rgb * input.lightmap;
+    // smoothness carries how much the block glows (the bloom pass reads it); data the light ratio.
+    set_surface(n, emissive, clamp(luma(surface.color.rgb) / max(luma(vanilla), 0.004), 0.0, 4.0));
+    return surface;
 }

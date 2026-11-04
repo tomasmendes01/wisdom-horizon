@@ -1,7 +1,7 @@
 schema = 1
 id = "wisdom_horizon_lite"
 name = "Wisdom Shaders V3 Lite (Horizon port)"
-version = "1.1.0"
+version = "1.3.7"
 api = "0.1"
 description = "The LITE profile of bobcao3's Wisdom Shaders V3 (Build 3300) ported to Horizon's shader API: its sun, ambient and torch colours, Oren-Nayar and GGX lighting, jittered soft shadows, atmosphere, 2D clouds, fog and AgX tonemap, translated from GLSL to WGSL. Unofficial port."
 authors = ["bobcao3", "tomasmendes01"]
@@ -33,8 +33,21 @@ distance = 64.0
 option = "water_reflections"
 
 [[post]]
+file = "post/ratio_copy.wgsl"
+name = "Light ratio (last frame)"
+output = "light_ratio_prev"
+scale = 0.25
+
+[[post]]
+file = "post/ratio_update.wgsl"
+files = ["post/entity_light.wgsl"]
+name = "Light ratio"
+output = "light_ratio"
+scale = 0.25
+
+[[post]]
 file = "post/composite.wgsl"
-files = ["post/bloom_none.wgsl"]
+files = ["post/bloom_none.wgsl", "post/entity_light.wgsl", "post/skyline_fade.wgsl"]
 name = "Colour"
 
 [[textures]]
@@ -139,6 +152,84 @@ id = "vignette"
 name = "Vignette"
 type = "bool"
 default = true
+
+[[lights]]
+color = [1.0, 0.62, 0.3]
+blocks = ["torch", "wall_torch", "lantern", "campfire", "jack_o_lantern", "lava", "fire", "candle", "*_candle"]
+
+[[lights]]
+color = [0.35, 0.75, 1.0]
+blocks = ["soul_torch", "soul_wall_torch", "soul_lantern", "soul_campfire", "soul_fire"]
+
+[[lights]]
+color = [1.0, 0.2, 0.12]
+blocks = ["redstone_torch", "redstone_wall_torch", "redstone_lamp"]
+
+[[lights]]
+color = [1.0, 0.85, 0.55]
+blocks = ["glowstone", "shroomlight", "ochre_froglight", "pearlescent_froglight", "verdant_froglight", "end_rod"]
+
+[[lights]]
+color = [0.7, 0.95, 1.0]
+blocks = ["sea_lantern", "beacon", "conduit"]
+
+[[options]]
+id = "relight_entities"
+name = "Light mobs and chests"
+description = "Lights mobs, items, chests and particles like the terrain around them."
+type = "bool"
+default = true
+
+[[options]]
+id = "held_lights"
+name = "Held light sources"
+description = "A torch or lantern in hand lights the area (needs Horizon's dynamic lights on)."
+type = "bool"
+default = true
+
+[[options]]
+id = "skyline_fade"
+name = "Horizon haze"
+description = "Blends the far edge of the loaded terrain into the sky."
+type = "bool"
+default = true
+
+[[options]]
+id = "night_brightness"
+name = "Night brightness"
+description = "Moonlight and night ambient light, over Wisdom's own (1)."
+type = "float"
+default = 3.0
+min = 0.5
+max = 6.0
+step = 0.25
+
+[[options]]
+id = "relight_debug"
+name = "Light mobs: diagnostic view"
+description = "Shows relit pixels magenta, water cyan, and the light ratio in the top-left corner."
+type = "bool"
+default = false
+
+[[options]]
+id = "rain_fog"
+name = "Rain fog"
+description = "How much rain thickens the fog: 1 is Wisdom's own, 0 none."
+type = "float"
+default = 0.5
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "emissive_brightness"
+name = "Glowing blocks"
+description = "How bright fire, lava, glowstone and torches are (1: their own colour)."
+type = "float"
+default = 1.0
+min = 0.25
+max = 3.0
+step = 0.05
 
 [budget]
 gpu_ms = 1.5

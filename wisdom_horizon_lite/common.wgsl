@@ -7,6 +7,9 @@
 
 override exposure_mul: f32 = 1.0;
 override agx_tonemap: bool = true;
+// Horizon port option: how much the moonlight and the night's ambient light are raised over
+// Wisdom's own (1), which many found too dark to play in.
+override night_brightness: f32 = 3.0;
 
 const PI: f32 = 3.14159265;
 const TAU: f32 = 6.2831853;
@@ -65,7 +68,7 @@ fn commons() -> Commons {
     var sun = vec3<f32>(0.9243, 0.4, 0.0913) * 2.22 * sunrise
         + vec3<f32>(1.2311, 1.0, 0.8286) * 3.3 * noon
         + vec3<f32>(0.9943, 0.419, 0.0945) * 2.6 * sunset
-        + vec3<f32>(0.34, 0.5, 0.6) * 0.2 * midnight;
+        + vec3<f32>(0.34, 0.5, 0.6) * 0.2 * night_brightness * midnight;
     sun *= 1.0 - coverage;
 
     let ext = clamp((t - 12350.0) / 100.0, 0.0, 1.0) - clamp((t - 13050.0) / 100.0, 0.0, 1.0)
@@ -74,7 +77,7 @@ fn commons() -> Commons {
     var ambient = vec3<f32>(0.543, 0.772, 0.786) * 0.27 * sunrise
         + vec3<f32>(0.686, 0.702, 0.73) * 0.34 * noon
         + vec3<f32>(0.543, 0.772, 0.747) * 0.26 * sunset
-        + vec3<f32>(0.06, 0.088, 0.117) * 0.1 * midnight;
+        + vec3<f32>(0.06, 0.088, 0.117) * 0.1 * night_brightness * midnight;
 
     // The Nether and the End have no sun; a flat light of their own colour instead.
     if frame.dimension == -1 {
@@ -132,7 +135,9 @@ fn calc_atmosphere(sphere: vec3<f32>, v: vec3<f32>, c: Commons) -> vec3<f32> {
     let vds = max(dot(v, frame.light_direction), 0.0) * (1.0 - c.ext_shadow);
     let k = max(frame.light_direction.y * 2.0 + 1.0, 0.01);
     at = mix(at, c.sun + c.ambient, smoothstep(0.1, 1.0, h2 * pow(vds, k)));
-    at *= max(0.0, luma(c.ambient) * 1.2 - 0.02);
+    // Wisdom's multiplier is 0 at night, which turns the sky and the fog black once rain
+    // hides the stars: keep a dim moonlit floor (Horizon port change).
+    at *= max(0.008 * night_brightness, luma(c.ambient) * 1.2 - 0.02);
 
     at += c.sun * 0.009 * vds * (0.7 + c.cloud_coverage);
     at += c.sun * 0.015 * pow(vds, 8.0) * (0.7 + c.cloud_coverage);

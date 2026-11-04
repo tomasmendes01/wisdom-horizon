@@ -37,3 +37,24 @@ An unofficial port of **Wisdom Shaders V3 (Build 3300)** by bobcao3
 
 The **Lite** pack follows Wisdom's LITE profile: a smaller shadow map, single-tap
 shadows, no cloud shadows, no water mirror, no bloom and no FXAA.
+
+## Changes since 1.1.0
+
+- Night: the sky and fog no longer turn black when rain hides the stars, rain streaks stay faint
+  in the dark, and a "Night brightness" option raises the moonlight and night ambient light
+  (3x Wisdom's by default).
+- Rain: lighter fog in the rain ("Rain fog", 0.5 by default; 1 is Wisdom's), the water gets the
+  same fog as the land, and the sun's glint on water fades under rain clouds.
+- Water: its top stays flat (the waves are in the normals, as in Wisdom), and the mirror Horizon
+  draws with vanilla's light is brought to this pack's light.
+- Mobs, items, chests and particles: Horizon draws them with vanilla's light, so a post pass
+  relights them by how this pack's light compares with vanilla's on the terrain in view, eased
+  over time ("Light mobs and chests", with a diagnostic view). Water is told apart by a mark in
+  its colour's low bits and by its flat top.
+- Held light sources light the terrain when Horizon's Dynamic lights extra is on, coloured by the
+  manifest's [[lights]].
+- Glowing blocks show their own colour instead of burning out to white at night ("Glowing
+  blocks"), with extra bloom around them in the full pack ("Glow bloom").
+- The far edge of the loaded terrain blends into the sky ("Horizon haze"), which hides the band a
+  server's shorter view distance leaves.
+
