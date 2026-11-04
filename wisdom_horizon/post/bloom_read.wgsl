@@ -6,8 +6,8 @@ fn bloom_at(uv: vec2<f32>) -> vec3<f32> {
     var sum = vec3<f32>(0.0);
     for (var i = 0; i < 8; i++) {
         let a = f32(i) * 0.785398;
-        sum += textureSampleLevel(bloom, linear_sampler, uv + vec2<f32>(cos(a), sin(a)) * px * 2.5, 0.0).rgb;
+        sum += textureSampleLevel(bloom, linear_sampler, uv + vec2<f32>(cos(a), sin(a)) * px * 4.0, 0.0).rgb;
     }
     let center = textureSampleLevel(bloom, linear_sampler, uv, 0.0).rgb;
-    return (sum / 8.0) * 0.6 + center * 0.4;
+    return (sum / 8.0) * 0.75 + center * 0.25;
 }
