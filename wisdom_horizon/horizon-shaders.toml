@@ -1,0 +1,169 @@
+schema = 1
+id = "wisdom_horizon"
+name = "Wisdom Shaders V3 (Horizon port)"
+version = "1.1.0"
+api = "0.1"
+description = "bobcao3's Wisdom Shaders V3 (Build 3300) ported to Horizon's shader API: its sun, ambient and torch colours, Oren-Nayar and GGX lighting, jittered soft shadows, atmosphere, 2D clouds, fog and AgX tonemap, translated from GLSL to WGSL. Unofficial port."
+authors = ["bobcao3", "tomasmendes01"]
+license = "Apache-2.0"
+shared = ["common.wgsl"]
+
+[sky]
+file = "sky.wgsl"
+name = "Atmosphere and clouds"
+sun = false
+clouds = false
+
+[material]
+file = "material.wgsl"
+name = "Lighting, shadows and water"
+fog = false
+
+[vertex]
+file = "vertex.wgsl"
+
+[weather]
+file = "weather.wgsl"
+
+[shadow]
+resolution = 2048
+distance = 160.0
+
+[reflection]
+option = "water_reflections"
+
+[[post]]
+file = "post/bloom.wgsl"
+name = "Bloom"
+output = "bloom"
+scale = 0.5
+
+[[post]]
+file = "post/composite.wgsl"
+files = ["post/bloom_read.wgsl"]
+name = "Colour"
+
+[[post]]
+file = "post/fxaa.wgsl"
+name = "Anti-aliasing"
+
+[[textures]]
+id = "agx_lut"
+file = "agx_lut.png"
+filter = "linear"
+wrap = "clamp"
+
+[[materials]]
+id = 1
+sprites = ["block/*_leaves", "block/vine"]
+
+[[materials]]
+id = 2
+sprites = [
+    "block/short_grass",
+    "block/grass",
+    "block/fern",
+    "block/dandelion",
+    "block/poppy",
+    "block/*_tulip",
+    "block/oxeye_daisy",
+    "block/cornflower",
+    "block/allium",
+    "block/azure_bluet",
+    "block/blue_orchid",
+    "block/lily_of_the_valley",
+    "block/dead_bush",
+    "block/*_sapling",
+    "block/wheat_stage*",
+    "block/carrots_stage*",
+    "block/potatoes_stage*",
+    "block/beetroots_stage*",
+]
+
+[[options]]
+id = "exposure_mul"
+name = "Exposure"
+type = "float"
+default = 1.0
+min = 0.5
+max = 2.0
+step = 0.05
+
+[[options]]
+id = "agx_tonemap"
+name = "AgX tonemap"
+description = "Wisdom V3's default; off uses the ACES curve."
+type = "bool"
+default = true
+
+[[options]]
+id = "shadow_filter"
+name = "Soft shadows"
+type = "bool"
+default = true
+
+[[options]]
+id = "cloud_shadow"
+name = "Cloud shadows"
+type = "bool"
+default = true
+
+[[options]]
+id = "clouds_2d"
+name = "Clouds"
+type = "bool"
+default = true
+
+[[options]]
+id = "water_reflections"
+name = "Water reflections"
+type = "bool"
+default = true
+
+[[options]]
+id = "waving_plants"
+name = "Waving plants"
+type = "bool"
+default = true
+
+[[options]]
+id = "bloom_strength"
+name = "Bloom"
+type = "float"
+default = 0.3
+min = 0.0
+max = 1.0
+step = 0.05
+
+[[options]]
+id = "contrast"
+name = "Contrast"
+type = "float"
+default = 1.0
+min = 0.8
+max = 1.4
+step = 0.02
+
+[[options]]
+id = "saturation"
+name = "Saturation"
+type = "float"
+default = 1.0
+min = 0.0
+max = 2.0
+step = 0.05
+
+[[options]]
+id = "vignette"
+name = "Vignette"
+type = "bool"
+default = true
+
+[[options]]
+id = "fxaa"
+name = "Anti-aliasing (FXAA)"
+type = "bool"
+default = true
+
+[budget]
+gpu_ms = 4.0
