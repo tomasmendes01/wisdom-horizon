@@ -5,6 +5,8 @@ An unofficial port of **Wisdom Shaders V3 (Build 3300)** by bobcao3
 (schema 1, API 0.1). Wisdom Shaders is licensed under the Apache License 2.0
 (LICENSE.txt); so is this port. Not an official Wisdom Shaders release.
 
+Ported to Horizon by tomasmendes01 (in-game name: **iLoong**).
+
 ## What was ported (translated from GLSL to WGSL)
 
 - `calcCommons`: the sunrise / noon / sunset / midnight sun and ambient colours, the
